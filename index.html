@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Grand Gallery — A Walk Through Masterpieces</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; font-family: 'Georgia', 'Times New Roman', serif; }
+  #app { width: 100vw; height: 100vh; display: block; }
+  canvas { display: block; }
+
+  /* ---------- Loading screen ---------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 50;
+    background: radial-gradient(ellipse at center, #1a1a1a 0%, #050505 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: #d8c9a8; transition: opacity 1s ease; text-align: center;
+  }
+  #loader h1 { font-size: 2.4rem; letter-spacing: 0.18em; font-weight: normal; margin-bottom: 0.4rem; color: #e8dcc0; }
+  #loader .sub { font-size: 0.85rem; letter-spacing: 0.35em; text-transform: uppercase; color: #8a7d5f; margin-bottom: 2rem; }
+  #loadbar-wrap { width: 280px; height: 2px; background: #2a2a2a; border-radius: 2px; overflow: hidden; }
+  #loadbar { height: 100%; width: 0%; background: linear-gradient(90deg, #b8964f, #e8dcc0); transition: width 0.3s ease; }
+  #loadpct { margin-top: 0.8rem; font-size: 0.8rem; letter-spacing: 0.2em; color: #8a7d5f; }
+  #enter-btn {
+    margin-top: 2rem; padding: 0.9rem 2.6rem; background: transparent;
+    border: 1px solid #b8964f; color: #e8dcc0; font-family: inherit; font-size: 0.9rem;
+    letter-spacing: 0.25em; text-transform: uppercase; cursor: pointer; opacity: 0;
+    pointer-events: none; transition: all 0.4s ease;
+  }
+  #enter-btn.ready { opacity: 1; pointer-events: auto; }
+  #enter-btn:hover { background: #b8964f; color: #1a1a1a; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    z-index: 20; color: #d8c9a8; font-size: 0.72rem; letter-spacing: 0.12em;
+    text-transform: uppercase; background: rgba(10,10,10,0.55); padding: 9px 20px;
+    border-radius: 30px; border: 1px solid rgba(184,150,79,0.3); backdrop-filter: blur(6px);
+    display: flex; gap: 18px; align-items: center; pointer-events: none; opacity: 0; transition: opacity 0.6s;
+  }
+  #hud.show { opacity: 1; }
+  #hud .key { color: #b8964f; }
+  #hud .sep { color: #444; }
+
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 15; width: 22px; height: 22px; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  }
+  #crosshair.show { opacity: 0.9; }
+  #crosshair .ring { width: 100%; height: 100%; border: 2px solid rgba(40,34,22,0.55); border-radius: 50%; box-shadow: 0 0 4px rgba(255,255,255,0.4); }
+  #crosshair.hot .ring { border-color: #b8964f; transform: scale(1.3); transition: all 0.2s; box-shadow: 0 0 14px rgba(184,150,79,0.9); }
+  #crosshair .label {
+    position: absolute; top: 150%; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-size: 0.7rem; letter-spacing: 0.15em; color: #f4ead0;
+    text-transform: uppercase; opacity: 0; transition: opacity 0.2s;
+    background: rgba(18,16,12,0.8); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(184,150,79,0.4);
+  }
+  #crosshair.hot .label { opacity: 1; }
+
+  /* ---------- Info panel ---------- */
+  #panel {
+    position: fixed; top: 0; right: 0; height: 100%; width: 440px; max-width: 90vw; z-index: 30;
+    background: linear-gradient(160deg, rgba(20,18,14,0.97), rgba(10,9,7,0.98));
+    border-left: 1px solid rgba(184,150,79,0.35); color: #ddd2b8;
+    transform: translateX(100%); transition: transform 0.5s cubic-bezier(0.22,1,0.36,1);
+    overflow-y: auto; backdrop-filter: blur(10px); box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+  }
+  #panel.open { transform: translateX(0); }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: #b8964f55; border-radius: 4px; }
+  /* full painting, never cropped */
+  #panel .hero { width: 100%; height: 340px; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #0d0c0a; position: relative; border-bottom: 1px solid rgba(184,150,79,0.3); }
+  #panel-close {
+    position: absolute; top: 16px; right: 18px; z-index: 3; width: 38px; height: 38px;
+    background: rgba(10,10,10,0.6); border: 1px solid rgba(184,150,79,0.4); color: #e8dcc0;
+    font-size: 1.3rem; cursor: pointer; border-radius: 50%; line-height: 1; transition: all 0.25s;
+  }
+  #panel-close:hover { background: #b8964f; color: #1a1a1a; }
+  #panel .body { padding: 26px 30px 60px; }
+  #panel .title { font-size: 1.85rem; color: #fbf4e2; margin-bottom: 4px; line-height: 1.2; }
+  #panel .artist { font-size: 1.02rem; color: #e0b35e; font-style: italic; margin-bottom: 2px; }
+  #panel .meta { font-size: 0.8rem; color: #b3a47e; letter-spacing: 0.08em; margin-bottom: 20px; text-transform: uppercase; }
+  #panel .desc { font-size: 1.0rem; line-height: 1.75; color: #ece3cf; margin-bottom: 22px; }
+  #panel .section-h { font-size: 0.78rem; letter-spacing: 0.2em; text-transform: uppercase; color: #e0b35e; margin: 22px 0 12px; border-bottom: 1px solid rgba(224,179,94,0.3); padding-bottom: 6px; }
+  #panel .facts li { list-style: none; font-size: 0.95rem; line-height: 1.65; color: #e2d9c2; margin-bottom: 11px; padding-left: 18px; position: relative; }
+  #panel .facts li::before { content: '◆'; position: absolute; left: 0; color: #b8964f; font-size: 0.6rem; top: 4px; }
+  #panel .closeups { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #panel .closeup { cursor: pointer; border: 1px solid rgba(184,150,79,0.3); border-radius: 4px; overflow: hidden; position: relative; height: 110px; background-repeat: no-repeat; }
+  #panel .closeup .cap { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(10,9,7,0.85); font-size: 0.68rem; padding: 5px 8px; color: #ddd2b8; letter-spacing: 0.05em; }
+  #panel .closeup:hover { border-color: #b8964f; }
+
+  /* ---------- Zoom lightbox ---------- */
+  #zoom { position: fixed; inset: 0; z-index: 40; background: rgba(5,5,5,0.95); display: none; align-items: center; justify-content: center; flex-direction: column; cursor: zoom-out; }
+  #zoom.open { display: flex; }
+  #zoom img { max-width: 88vw; max-height: 80vh; border: 1px solid rgba(184,150,79,0.4); box-shadow: 0 0 80px rgba(0,0,0,0.8); }
+  #zoom .zcap { color: #b8964f; margin-top: 18px; letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem; }
+
+  /* ---------- Directory / intro overlay ---------- */
+  #title-tag {
+    position: fixed; top: 18px; left: 20px; z-index: 18; opacity: 0; transition: opacity 0.8s;
+    background: rgba(18,16,12,0.72); padding: 10px 18px; border-radius: 8px;
+    border: 1px solid rgba(184,150,79,0.4); backdrop-filter: blur(6px);
+  }
+  #title-tag.show { opacity: 1; }
+  #title-tag .t { font-size: 1.05rem; letter-spacing: 0.22em; color: #f4ead0; }
+  #title-tag .s { font-size: 0.66rem; letter-spacing: 0.3em; text-transform: uppercase; color: #d9b878; margin-top: 3px; }
+  @media (max-width: 600px) { #hud { font-size: 0.6rem; gap: 10px; padding: 7px 12px; } }
+</style>
+</head>
+<body>
+  <div id="loader">
+    <h1>THE GRAND GALLERY</h1>
+    <div class="sub">A Walk Through Ten Masterpieces</div>
+    <div id="loadbar-wrap"><div id="loadbar"></div></div>
+    <div id="loadpct">Loading the collection… 0%</div>
+    <button id="enter-btn">Enter the Gallery</button>
+  </div>
+
+  <div id="title-tag">
+    <div class="t">THE GRAND GALLERY</div>
+    <div class="s">Ten Masterpieces · Walk &amp; Discover</div>
+  </div>
+
+  <div id="crosshair"><div class="ring"></div><div class="label">View Artwork</div></div>
+
+  <div id="hud">
+    <span><span class="key">W A S D</span> / Arrows — Move</span>
+    <span class="sep">·</span>
+    <span><span class="key">Mouse</span> — Look</span>
+    <span class="sep">·</span>
+    <span><span class="key">Click</span> — Inspect Painting</span>
+    <span class="sep">·</span>
+    <span><span class="key">Esc</span> — Release Cursor</span>
+  </div>
+
+  <div id="panel">
+    <div id="panel-close">×</div>
+    <div class="hero" id="panel-hero"></div>
+    <div class="body">
+      <div class="title" id="panel-title"></div>
+      <div class="artist" id="panel-artist"></div>
+      <div class="meta" id="panel-meta"></div>
+      <div class="desc" id="panel-desc"></div>
+      <div class="section-h">Notable Details</div>
+      <ul class="facts" id="panel-facts"></ul>
+      <div class="section-h" id="closeup-h">Close-Ups · Click to Zoom</div>
+      <div class="closeups" id="panel-closeups"></div>
+    </div>
+  </div>
+
+  <div id="zoom"><img id="zoom-img" src="" alt="" /><div class="zcap" id="zoom-cap"></div></div>
+
+  <canvas id="app"></canvas>
+
+  <script type="importmap">
+  { "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }}
+  </script>
+  <script type="module" src="./gallery.js?v=10"></script>
+</body>
+</html>
