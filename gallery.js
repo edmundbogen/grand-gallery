@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PAINTINGS } from './paintings.js?v=10';
+import { PAINTINGS } from './paintings.js?v=11';
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  THE GRAND GALLERY — a first-person walkable 3D art museum
@@ -364,6 +364,94 @@ document.addEventListener('mousedown', e => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+//  MOBILE / TOUCH CONTROLS  (desktop path above is untouched)
+//  - left joystick → walk      - drag elsewhere → look      - tap art → inspect
+// ───────────────────────────────────────────────────────────────────────────
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const joystick = { x: 0, y: 0 };   // -1..1; consumed by updateMovement()
+
+if (isTouch) {
+  document.body.classList.add('touch');
+
+  // -- Joystick (walk) --
+  const joyEl = document.getElementById('joystick');
+  const knob = document.getElementById('joy-knob');
+  let joyId = null, joyCx = 0, joyCy = 0;
+  const JOY_R = 46;
+  const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px, ${dy}px)`; };
+
+  joyEl.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    joyId = t.identifier;
+    const r = joyEl.getBoundingClientRect();
+    joyCx = r.left + r.width / 2; joyCy = r.top + r.height / 2;
+    knob.style.background = 'rgba(212,175,89,1)';
+  }, { passive: false });
+
+  window.addEventListener('touchmove', e => {
+    if (joyId === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier !== joyId) continue;
+      let dx = t.clientX - joyCx, dy = t.clientY - joyCy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > JOY_R) { dx = dx / dist * JOY_R; dy = dy / dist * JOY_R; }
+      setKnob(dx, dy);
+      joystick.x = dx / JOY_R;       // strafe
+      joystick.y = -dy / JOY_R;      // up on screen = forward
+    }
+  }, { passive: false });
+
+  const endJoy = e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyId) {
+        joyId = null; joystick.x = joystick.y = 0; setKnob(0, 0);
+        knob.style.background = 'rgba(184,150,79,0.85)';
+      }
+    }
+  };
+  window.addEventListener('touchend', endJoy);
+  window.addEventListener('touchcancel', endJoy);
+
+  // -- Drag to look (anywhere not on the joystick / UI) + tap to inspect --
+  let lookId = null, lastX = 0, lastY = 0, moved = 0, downX = 0, downY = 0;
+  const onUI = el => el.closest && el.closest('#joystick, #panel, #zoom, #hud, #touch-controls, #loader');
+
+  canvas.addEventListener('touchstart', e => {
+    if (panelOpen || zoomOpen) return;
+    const t = e.changedTouches[0];
+    if (onUI(t.target)) return;
+    lookId = t.identifier; lastX = downX = t.clientX; lastY = downY = t.clientY; moved = 0;
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', e => {
+    if (lookId === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier !== lookId) continue;
+      const dx = t.clientX - lastX, dy = t.clientY - lastY;
+      lastX = t.clientX; lastY = t.clientY;
+      moved += Math.abs(dx) + Math.abs(dy);
+      yaw   -= dx * 0.005;
+      pitch -= dy * 0.005;
+      pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch));
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchend', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== lookId) continue;
+      lookId = null;
+      // a tap (little movement) = inspect the painting in the center of view
+      if (moved < 12) {
+        raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+        const hits = raycaster.intersectObjects(interactables, false);
+        if (hits.length && hits[0].distance < 12) openPanel(hits[0].object.userData.painting);
+      }
+    }
+  }, { passive: true });
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 //  RAYCAST — highlight the painting under the crosshair
 // ───────────────────────────────────────────────────────────────────────────
 const raycaster = new THREE.Raycaster();
@@ -394,8 +482,9 @@ function updateMovement(dt) {
   const back = (keys['KeyS'] || keys['ArrowDown']) ? 1 : 0;
   const left = (keys['KeyA'] || keys['ArrowLeft']) ? 1 : 0;
   const right = (keys['KeyD'] || keys['ArrowRight']) ? 1 : 0;
-  const f = fwd - back, s = right - left;
-  if (f || s) {
+  // keyboard + joystick combine (joystick.y forward, joystick.x strafe)
+  const f = (fwd - back) + joystick.y, s = (right - left) + joystick.x;
+  if (Math.abs(f) > 0.01 || Math.abs(s) > 0.01) {
     // forward direction from yaw (xz-plane only)
     const sinY = Math.sin(yaw), cosY = Math.cos(yaw);
     move.x += (-sinY * f) + (cosY * s);
@@ -485,9 +574,14 @@ const titleTag = document.getElementById('title-tag');
 enterBtn.addEventListener('click', () => {
   loaderEl.style.opacity = '0';
   setTimeout(() => { loaderEl.style.display = 'none'; }, 1000);
-  hud.classList.add('show');
   titleTag.classList.add('show');
-  canvas.requestPointerLock();
+  if (isTouch) {
+    // touch: no pointer lock; the joystick + drag-to-look take over.
+    document.getElementById('touch-controls').style.display = 'block';
+  } else {
+    hud.classList.add('show');
+    canvas.requestPointerLock();
+  }
 });
 
 // ───────────────────────────────────────────────────────────────────────────

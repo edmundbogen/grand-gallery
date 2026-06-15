@@ -105,7 +105,30 @@
   #title-tag.show { opacity: 1; }
   #title-tag .t { font-size: 1.05rem; letter-spacing: 0.22em; color: #f4ead0; }
   #title-tag .s { font-size: 0.66rem; letter-spacing: 0.3em; text-transform: uppercase; color: #d9b878; margin-top: 3px; }
-  @media (max-width: 600px) { #hud { font-size: 0.6rem; gap: 10px; padding: 7px 12px; } }
+  @media (max-width: 600px) { #hud { font-size: 0.6rem; gap: 8px; padding: 7px 12px; bottom: 92px; } }
+
+  /* ---------- Mobile touch controls (hidden by default; JS enables on touch) ---------- */
+  #touch-controls { display: none; }
+  body.touch #touch-controls { display: block; }
+  body.touch #crosshair { display: none; }            /* no crosshair on touch */
+  #joystick {
+    position: fixed; left: 26px; bottom: 28px; z-index: 22;
+    width: 120px; height: 120px; border-radius: 50%;
+    background: rgba(18,16,12,0.45); border: 2px solid rgba(184,150,79,0.5);
+    backdrop-filter: blur(4px); touch-action: none;
+  }
+  #joy-knob {
+    position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
+    margin: -26px 0 0 -26px; border-radius: 50%;
+    background: rgba(184,150,79,0.85); border: 2px solid #f4ead0;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4); transition: background 0.15s;
+  }
+  #tap-hint {
+    position: fixed; bottom: 36px; right: 22px; z-index: 22; max-width: 150px;
+    text-align: right; color: #f4ead0; font-size: 0.68rem; line-height: 1.4;
+    letter-spacing: 0.04em; background: rgba(18,16,12,0.55); padding: 8px 12px;
+    border-radius: 8px; border: 1px solid rgba(184,150,79,0.35); pointer-events: none;
+  }
 </style>
 </head>
 <body>
@@ -123,6 +146,12 @@
   </div>
 
   <div id="crosshair"><div class="ring"></div><div class="label">View Artwork</div></div>
+
+  <!-- ───────── Mobile touch controls (shown only on touch devices) ───────── -->
+  <div id="touch-controls">
+    <div id="joystick"><div id="joy-knob"></div></div>
+    <div id="tap-hint">Drag anywhere to look · Tap a painting to inspect</div>
+  </div>
 
   <div id="hud">
     <span><span class="key">W A S D</span> / Arrows — Move</span>
@@ -159,6 +188,6 @@
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
   }}
   </script>
-  <script type="module" src="./gallery.js?v=10"></script>
+  <script type="module" src="./gallery.js?v=11"></script>
 </body>
 </html>
